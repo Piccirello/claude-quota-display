@@ -287,7 +287,6 @@ def main() -> None:
     thread.start()
 
     display = Display(screen)
-    clock = pygame.time.Clock()
     last_sig = None
     running = True
     while running:
@@ -305,7 +304,8 @@ def main() -> None:
             display.render(state)
             pygame.display.flip()
             last_sig = sig
-        clock.tick(10)  # poll for input/clock changes 10x/s; redraw is gated
+        # wake just past each second; pygame.event.wait() would poll every 1ms
+        time.sleep(1.005 - time.time() % 1)
 
     stop.set()
     pygame.quit()
