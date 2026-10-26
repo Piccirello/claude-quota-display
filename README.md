@@ -33,6 +33,8 @@ renders it as big, across-the-room-readable bars:
 - **CREDITS** — extra-usage spend against your monthly cap (if you have it enabled).
 - A live clock, and a colour code that slides from green → yellow → orange → red
   as you approach a limit.
+- **Tap the screen** to refresh right away. Taps within 30 seconds of the last
+  fetch are ignored, and so are taps while the API is rate-limiting you.
 
 It's deliberately boring in the best way: a light, steady load — around 130 MB
 of RAM and a CPU that sits essentially idle (it only repaints when the clock
@@ -49,7 +51,7 @@ whatever you have lying around.
 | Part | Notes |
 | --- | --- |
 | **Raspberry Pi 3B+** | A 3B+ is plenty. A Pi 4 / 5 or even a Zero 2 W works too — this app is featherweight. |
-| **Waveshare 3.5″ capacitive touch screen (640×480)** | The star of the show. Shows up as a standard 640×480 display once configured. Touch isn't required by this app, but it's nice. |
+| **Waveshare 3.5″ capacitive touch screen (640×480)** | The star of the show. Shows up as a standard 640×480 display once configured. Touch is optional; it lets you tap to refresh. |
 | **32 GB microSD card** | Get a fast one (A1/A2, e.g. SanDisk Extreme) — it makes flashing and boot noticeably snappier. 16 GB is fine if that's what you have. |
 | **40-pin GPIO ribbon cable** | To get the Pi's GPIO out to the screen at a sensible angle inside the case. |
 | **3D-printed case — [Raspberry Pi Macintosh Plus](https://www.printables.com/model/1259764-raspberry-pi-5-macintosh-plus)** | A gorgeous little retro Mac enclosure. (Linked is the newer Pi 5 revision of the case I used — check the fit notes for your Pi model.) |
@@ -184,6 +186,7 @@ Everything tweakable is at the top of the two Python files:
 | Want to change… | Where |
 | --- | --- |
 | How often it polls | `POLL_INTERVAL` in `quota_display.py` (default 5*60s) |
+| How soon after a fetch a tap can refresh again | `TAP_COOLDOWN` in `quota_display.py` (default 30s) |
 | When data is flagged "stale" | `STALE_AFTER` in `quota_display.py` |
 | Colours / theme | the colour constants near the top of `quota_display.py` |
 | Colour thresholds (when bars turn yellow/red) | `bar_color()` in `quota_display.py` |

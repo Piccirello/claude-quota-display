@@ -25,6 +25,7 @@ POLL_INTERVAL = 5 * 60      # seconds between usage fetches (quotas move slowly)
 MAX_BACKOFF = 30 * 60       # cap for exponential backoff after errors
 NET_RETRY = 5               # first retry when the network isn't up (e.g. at boot)
 MAX_RETRY_AFTER = 60 * 60   # cap on a server Retry-After hint
+TAP_COOLDOWN = 30           # seconds after any fetch before a tap can trigger another
 STALE_AFTER = 20 * 60       # seconds before cached data is flagged stale
 
 BG = (16, 18, 24)
@@ -58,6 +59,7 @@ class State:
         self.last_success: float = 0.0       # wall clock, for display
         self.last_success_mono: float = 0.0  # monotonic, for age/staleness
         self.error: str | None = None
+        self.refresh_not_before: float = 0.0  # monotonic; taps are ignored until then
 
     def update_ok(self, usage: dict) -> None:
         with self.lock:
@@ -74,6 +76,14 @@ class State:
         with self.lock:
             return self.usage, self.last_success, self.last_success_mono, self.error
 
+    def hold_refresh(self, seconds: float) -> None:
+        with self.lock:
+            self.refresh_not_before = time.monotonic() + seconds
+
+    def refresh_allowed(self) -> bool:
+        with self.lock:
+            return time.monotonic() >= self.refresh_not_before
+
 
 def _retry_after_seconds(exc: urllib.error.HTTPError) -> float | None:
     """Parse a Retry-After header (delta-seconds form) if the server sent one."""
@@ -84,12 +94,15 @@ def _retry_after_seconds(exc: urllib.error.HTTPError) -> float | None:
     return None
 
 
-def fetch_loop(state: State, stop: threading.Event) -> None:
+def fetch_loop(state: State, stop: threading.Event, wake: threading.Event) -> None:
     """Poll the usage endpoint, backing off exponentially on errors so we never
-    hammer the API — and honouring Retry-After when we're rate-limited (429)."""
+    hammer the API — and honouring Retry-After when we're rate-limited (429).
+    Setting `wake` (a tap) fetches early; State.refresh_allowed() gates that."""
     backoff = POLL_INTERVAL
     net_backoff = NET_RETRY
     while not stop.is_set():
+        # no tap-triggered fetch within TAP_COOLDOWN of this one, however it started
+        state.hold_refresh(TAP_COOLDOWN)
         try:
             state.update_ok(quota_api.fetch_usage())
             backoff = POLL_INTERVAL
@@ -102,6 +115,8 @@ def fetch_loop(state: State, stop: threading.Event) -> None:
             wait = backoff
             if exc.code == 429:
                 wait = max(_retry_after_seconds(exc) or 0, backoff)
+                # taps must not jump a rate limit
+                state.hold_refresh(wait)
         except urllib.error.URLError as exc:
             # couldn't connect (wifi/dns not up yet), so a quick retry costs the api nothing
             state.update_err(str(exc))
@@ -111,7 +126,9 @@ def fetch_loop(state: State, stop: threading.Event) -> None:
             state.update_err(str(exc))
             backoff = min(backoff * 2, MAX_BACKOFF)
             wait = backoff
-        stop.wait(wait)
+        # drop a wake that landed mid-fetch, then sleep until the next poll or a tap
+        wake.clear()
+        wake.wait(wait)
 
 
 # ---- formatting helpers ---------------------------------------------------
@@ -293,7 +310,8 @@ def main() -> None:
 
     state = State()
     stop = threading.Event()
-    thread = threading.Thread(target=fetch_loop, args=(state, stop), daemon=True)
+    wake = threading.Event()
+    thread = threading.Thread(target=fetch_loop, args=(state, stop, wake), daemon=True)
     thread.start()
 
     display = Display(screen)
@@ -307,6 +325,12 @@ def main() -> None:
                 pygame.K_ESCAPE, pygame.K_q,
             ):
                 running = False
+            elif event.type == pygame.FINGERDOWN or (
+                event.type == pygame.MOUSEBUTTONDOWN and event.button == 1
+            ):
+                # tap to refresh; a touch arrives as both events, the cooldown dedupes
+                if state.refresh_allowed():
+                    wake.set()
         # Only repaint when something visible actually changed (the clock ticks
         # once a second), so the loop is effectively idle the rest of the time.
         sig = display.signature(state)
@@ -318,6 +342,7 @@ def main() -> None:
         time.sleep(1.005 - time.time() % 1)
 
     stop.set()
+    wake.set()
     pygame.quit()
 
 
