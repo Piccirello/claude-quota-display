@@ -89,6 +89,9 @@ def _write_credentials(creds: dict) -> None:
     try:
         with os.fdopen(fd, "w") as fh:
             json.dump(creds, fh)
+            # on disk before the rename: a kiosk pi gets unplugged, not shut down
+            fh.flush()
+            os.fsync(fh.fileno())
         os.chmod(tmp, 0o600)
         os.replace(tmp, CREDENTIALS_PATH)
     except BaseException:
@@ -97,6 +100,12 @@ def _write_credentials(creds: dict) -> None:
         except OSError:
             pass
         raise
+    # and the rename itself
+    dir_fd = os.open(directory, os.O_RDONLY)
+    try:
+        os.fsync(dir_fd)
+    finally:
+        os.close(dir_fd)
 
 
 def _refresh_token() -> dict:
