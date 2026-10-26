@@ -249,8 +249,10 @@ class Display:
 
         # credits
         if extra.get("is_enabled"):
-            used = float(extra.get("used_credits") or 0)
-            limit = float(extra.get("monthly_limit") or 0)
+            # amounts arrive in minor units (cents), with the scale alongside
+            scale = 10 ** int(extra.get("decimal_places") or 0)
+            used = float(extra.get("used_credits") or 0) / scale
+            limit = float(extra.get("monthly_limit") or 0) / scale
             cur = extra.get("currency", "USD")
             sym = "$" if cur == "USD" else f"{cur} "
             self._text(self.f_label, "CREDITS", FG, PAD, 348)
