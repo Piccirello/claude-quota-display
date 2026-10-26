@@ -17,7 +17,7 @@ gauge sitting on my desk that I could glance at the way you glance at a clock.
 
 So I put one inside a 3D-printed Macintosh Plus the size of a coffee mug. It
 boots straight into a fullscreen readout of my **5-hour window**, my **7-day
-window**, and my **extra-usage credits**, and it refreshes itself every minute.
+window**, and my **extra-usage credits**, and it refreshes itself every five minutes.
 No browser, no cloud, no dashboard service — just ~250 lines of Python drawing
 directly to a tiny screen. This repo is everything you need to build your own.
 
@@ -199,7 +199,15 @@ python3 quota_api.py
 
 ## Managing it
 
-`Esc` or `q` quits the app (the autostart will bring it back on next boot).
+`Esc` or `q` quits the app, but the autostart's `lwrespawn` relaunches it about
+a second later. To stop it until the next boot, stop the wrapper first, then the
+app:
+
+```bash
+systemctl --user stop claude-quota.service
+pkill -f 'lwrespawn .*run\.sh'
+pkill -f 'quota_display\.py'
+```
 
 **To pick up changes** after a `git pull`, re-run `./install.sh` and answer `Y`
 when it offers to restart the running display.
