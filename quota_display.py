@@ -156,6 +156,19 @@ def fmt_reset_short(when: dt.datetime | None) -> str:
     return f"resets {when:%a %b} {when.day}"
 
 
+def model_limits(usage: dict) -> list[tuple[str, float, str | None]]:
+    """Per-model weekly caps (e.g. Fable) from the `limits` list, as
+    (label, percent, resets_at) rows."""
+    rows = []
+    for lim in usage.get("limits") or []:
+        if lim.get("kind") != "weekly_scoped":
+            continue
+        model = ((lim.get("scope") or {}).get("model") or {}).get("display_name")
+        if model:
+            rows.append((model.upper(), float(lim.get("percent") or 0), lim.get("resets_at")))
+    return rows
+
+
 # ---- drawing --------------------------------------------------------------
 class Display:
     def __init__(self, screen: pygame.Surface) -> None:
@@ -199,9 +212,9 @@ class Display:
         self._text(self.f_label, label, FG, PAD, y)
         self._text(self.f_pct, f"{pct:.0f}%", bar_color(pct), WIDTH - PAD, y - 2,
                    right=True)
-        self._bar(PAD, y + 36, WIDTH - 2 * PAD, 26, pct)
+        self._bar(PAD, y + 34, WIDTH - 2 * PAD, 24, pct)
         if reset_text:
-            self._text(self.f_small, reset_text, MUTED, PAD, y + 70)
+            self._text(self.f_small, reset_text, MUTED, PAD, y + 62)
 
     @staticmethod
     def signature(state: State) -> tuple:
@@ -236,16 +249,16 @@ class Display:
         seven = usage.get("seven_day") or {}
         extra = usage.get("extra_usage") or {}
 
-        self.quota_block(
-            108, "5-HOUR",
-            float(five.get("utilization") or 0),
-            fmt_reset_short(parse_reset(five.get("resets_at"))),
-        )
-        self.quota_block(
-            228, "7-DAY",
-            float(seven.get("utilization") or 0),
-            fmt_reset_short(parse_reset(seven.get("resets_at"))),
-        )
+        rows = [
+            ("5-HOUR", float(five.get("utilization") or 0), five.get("resets_at")),
+            ("7-DAY", float(seven.get("utilization") or 0), seven.get("resets_at")),
+            *model_limits(usage),
+        ]
+        # close up the rows when the credits row has to fit too
+        y, pitch = (90, 98) if extra.get("is_enabled") else (92, 110)
+        for label, pct, resets in rows:
+            self.quota_block(y, label, pct, fmt_reset_short(parse_reset(resets)))
+            y += pitch
 
         # credits
         if extra.get("is_enabled"):
@@ -255,11 +268,11 @@ class Display:
             limit = float(extra.get("monthly_limit") or 0) / scale
             cur = extra.get("currency", "USD")
             sym = "$" if cur == "USD" else f"{cur} "
-            self._text(self.f_label, "CREDITS", FG, PAD, 348)
+            self._text(self.f_label, "CREDITS", FG, PAD, y)
             self._text(self.f_pct, f"{sym}{used:.0f} / {sym}{limit:.0f}", FG,
-                       WIDTH - PAD, 346, right=True)
+                       WIDTH - PAD, y - 2, right=True)
             pct = (used / limit * 100) if limit else 0
-            self._bar(PAD, 384, WIDTH - 2 * PAD, 18, pct)
+            self._bar(PAD, y + 34, WIDTH - 2 * PAD, 16, pct)
 
         # status footer
         if error and last_success:

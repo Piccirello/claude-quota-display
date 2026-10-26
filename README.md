@@ -30,6 +30,8 @@ renders it as big, across-the-room-readable bars:
 
 - **5-HOUR** — your rolling 5-hour session limit, with the reset time.
 - **7-DAY** — your weekly limit, with the reset day.
+- **FABLE** — a model's own weekly cap, when your plan has one. Any per-model
+  cap the API reports gets its own row.
 - **CREDITS** — extra-usage spend against your monthly cap (if you have it enabled).
 - A live clock, and a colour code that slides from green → yellow → orange → red
   as you approach a limit.
