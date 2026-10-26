@@ -38,11 +38,28 @@ echo "==> Wiring up labwc autostart"
 mkdir -p "$CONFIG/labwc"
 AUTOSTART="$CONFIG/labwc/autostart"
 LAUNCH="/usr/bin/lwrespawn $REPO_DIR/run.sh &"
+SYSTEM_AUTOSTART=/etc/xdg/labwc/autostart
 
-# Seed a user autostart the first time. labwc runs the user file *instead of*
-# the system default, so we must reproduce the desktop's own startup entries —
-# otherwise the panel, desktop and output config would never launch.
-if [ ! -f "$AUTOSTART" ]; then
+# pi os starts labwc with -m (via labwc-pi), which runs the system autostart *and* the user one
+merged=0
+if pgrep -u "$(id -u)" -f '^(/usr/bin/)?labwc .*(-m|--merge-config)( |$)' >/dev/null ||
+   { ! pgrep -u "$(id -u)" -x labwc >/dev/null && grep -qs 'labwc -m' /usr/bin/labwc-pi; }; then
+  merged=1
+fi
+
+if [ "$merged" = 1 ]; then
+  # copied system entries would start the panel and desktop twice, and lwrespawn
+  # relaunches the losing copy every second
+  if [ -f "$AUTOSTART" ] && [ -f "$SYSTEM_AUTOSTART" ] &&
+     grep -qxF -f <(grep -v '^[[:space:]]*$' "$SYSTEM_AUTOSTART") "$AUTOSTART"; then
+    cp "$AUTOSTART" "$AUTOSTART.bak"
+    grep -vxF -f <(grep -v '^[[:space:]]*$' "$SYSTEM_AUTOSTART") "$AUTOSTART.bak" > "$AUTOSTART" || true
+    echo "    removed entries duplicated from $SYSTEM_AUTOSTART (backup: $AUTOSTART.bak)"
+  fi
+# Seed a user autostart the first time. Without -m labwc runs the user file
+# *instead of* the system default, so we must reproduce the desktop's own startup
+# entries — otherwise the panel, desktop and output config would never launch.
+elif [ ! -f "$AUTOSTART" ]; then
   if [ -f /etc/xdg/labwc/autostart ]; then
     cp /etc/xdg/labwc/autostart "$AUTOSTART"
   else
