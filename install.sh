@@ -5,7 +5,8 @@
 #   1. install python3-pygame if missing,
 #   2. enable autohide on the wf-panel-pi top bar,
 #   3. add the app to the labwc autostart (auto-restart via lwrespawn),
-#   4. optionally start it right now without a reboot.
+#   4. optionally start it right now without a reboot, or restart a running
+#      copy so it picks up changes.
 set -euo pipefail
 
 REPO_DIR="$(cd "$(dirname "$0")" && pwd)"
@@ -65,22 +66,46 @@ fi
 
 chmod +x "$REPO_DIR/run.sh"
 
-# 4. start now (optional) ---------------------------------------------------
-echo
-read -r -p "Start the display now (no reboot needed)? [Y/n] " ans
-ans="${ans:-Y}"
-if [[ "$ans" =~ ^[Yy] ]]; then
+# 4. start or restart now (optional) ----------------------------------------
+# matches the process run.sh execs, whether lwrespawn or systemd-run started it
+APP_PATTERN='^python3 -u quota_display\.py'
+is_running() { pgrep -u "$(id -u)" -f "$APP_PATTERN" >/dev/null; }
+
+start_now() {
   if [ -z "${WAYLAND_DISPLAY:-}" ]; then
     echo "    WAYLAND_DISPLAY not set — run this from the Pi's desktop session,"
     echo "    or just reboot. Skipping live start."
-  else
-    systemctl --user reset-failed claude-quota.service 2>/dev/null || true
-    systemd-run --user --unit=claude-quota \
-      --setenv=WAYLAND_DISPLAY="$WAYLAND_DISPLAY" \
-      --setenv=XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}" \
-      --setenv=PYGAME_HIDE_SUPPORT_PROMPT=1 \
-      "$REPO_DIR/run.sh"
-    echo "    started as user service 'claude-quota'"
+    return
+  fi
+  systemctl --user reset-failed claude-quota.service 2>/dev/null || true
+  systemd-run --user --unit=claude-quota \
+    --setenv=WAYLAND_DISPLAY="$WAYLAND_DISPLAY" \
+    --setenv=XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}" \
+    --setenv=PYGAME_HIDE_SUPPORT_PROMPT=1 \
+    "$REPO_DIR/run.sh"
+  echo "    started as user service 'claude-quota'"
+}
+
+echo
+if is_running; then
+  read -r -p "The display is already running. Restart it to pick up changes? [Y/n] " ans
+  ans="${ans:-Y}"
+  if [[ "$ans" =~ ^[Yy] ]]; then
+    systemctl --user stop claude-quota.service 2>/dev/null || true
+    pkill -u "$(id -u)" -f "$APP_PATTERN" || true
+    # lwrespawn relaunches the autostart copy about a second after it exits
+    sleep 3
+    if is_running; then
+      echo "    restarted"
+    else
+      start_now
+    fi
+  fi
+else
+  read -r -p "Start the display now (no reboot needed)? [Y/n] " ans
+  ans="${ans:-Y}"
+  if [[ "$ans" =~ ^[Yy] ]]; then
+    start_now
   fi
 fi
 

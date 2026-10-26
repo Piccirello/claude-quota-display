@@ -201,6 +201,9 @@ python3 quota_api.py
 
 `Esc` or `q` quits the app (the autostart will bring it back on next boot).
 
+**To pick up changes** after a `git pull`, re-run `./install.sh` and answer `Y`
+when it offers to restart the running display.
+
 To control the live instance the installer started, export your session env and
 talk to the user service:
 
