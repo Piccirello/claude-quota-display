@@ -23,6 +23,7 @@ WIDTH, HEIGHT = 640, 480
 PAD = 28
 POLL_INTERVAL = 5 * 60      # seconds between usage fetches (quotas move slowly)
 MAX_BACKOFF = 30 * 60       # cap for exponential backoff after errors
+NET_RETRY = 5               # first retry when the network isn't up (e.g. at boot)
 STALE_AFTER = 20 * 60       # seconds before cached data is flagged stale
 
 BG = (16, 18, 24)
@@ -85,10 +86,12 @@ def fetch_loop(state: State, stop: threading.Event) -> None:
     """Poll the usage endpoint, backing off exponentially on errors so we never
     hammer the API — and honouring Retry-After when we're rate-limited (429)."""
     backoff = POLL_INTERVAL
+    net_backoff = NET_RETRY
     while not stop.is_set():
         try:
             state.update_ok(quota_api.fetch_usage())
             backoff = POLL_INTERVAL
+            net_backoff = NET_RETRY
             wait = POLL_INTERVAL
         except urllib.error.HTTPError as exc:
             state.update_err(str(exc))
@@ -97,6 +100,11 @@ def fetch_loop(state: State, stop: threading.Event) -> None:
             wait = backoff
             if exc.code == 429:
                 wait = max(_retry_after_seconds(exc) or 0, backoff)
+        except urllib.error.URLError as exc:
+            # couldn't connect (wifi/dns not up yet), so a quick retry costs the api nothing
+            state.update_err(str(exc))
+            wait = net_backoff
+            net_backoff = min(net_backoff * 2, POLL_INTERVAL)
         except Exception as exc:  # noqa: BLE001 - keep the display alive
             state.update_err(str(exc))
             backoff = min(backoff * 2, MAX_BACKOFF)
