@@ -33,7 +33,7 @@ STALE_AFTER = 20 * 60       # seconds before cached data is flagged stale
 
 BG = (16, 18, 24)
 FG = (235, 237, 243)
-MUTED = (120, 126, 140)
+MUTED = (170, 176, 190)     # light enough to read small text on a 3.5in panel
 TRACK = (38, 42, 52)
 ACCENT = (210, 120, 70)     # Claude-ish terracotta for the title
 
@@ -164,8 +164,8 @@ class Display:
         self.f_clock = self._font(40, bold=True)
         self.f_label = self._font(26, bold=True)
         self.f_pct = self._font(30, bold=True)
-        self.f_small = self._font(20)
-        self.f_tiny = self._font(16)
+        self.f_small = self._font(24)
+        self.f_tiny = self._font(20)
 
     @staticmethod
     def _font(size: int, bold: bool = False) -> pygame.font.Font:
@@ -263,12 +263,12 @@ class Display:
 
         # status footer
         if error and last_success:
-            footer = f"stale - {error[:46]}"
+            footer = f"stale - {error[:40]}"
             color = ORANGE
         elif last_success:
             age = time.monotonic() - last_success_mono
             stale = age > STALE_AFTER
-            footer = f"updated {dt.datetime.fromtimestamp(last_success):%H:%M:%S}"
+            footer = f"updated {dt.datetime.fromtimestamp(last_success):%H:%M}"
             if stale:
                 footer += "  (stale)"
             color = ORANGE if stale else MUTED
@@ -276,7 +276,7 @@ class Display:
             footer = ""
             color = MUTED
         if footer:
-            self._text(self.f_tiny, footer, color, WIDTH // 2, HEIGHT - 28,
+            self._text(self.f_tiny, footer, color, WIDTH // 2, HEIGHT - 32,
                        center=True)
 
 
