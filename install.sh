@@ -87,6 +87,17 @@ chmod +x "$REPO_DIR/run.sh"
 # matches the process run.sh execs, whether lwrespawn or systemd-run started it
 APP_PATTERN='^python3 -u quota_display\.py'
 is_running() { pgrep -u "$(id -u)" -f "$APP_PATTERN" >/dev/null; }
+# the autostart wrapper, which relaunches the app whenever it exits
+has_wrapper() { pgrep -u "$(id -u)" -f "lwrespawn $REPO_DIR/run\.sh" >/dev/null; }
+
+# wait_for running|stopped: give the app up to 10 seconds to get there
+wait_for() {
+  for _ in 1 2 3 4 5 6 7 8 9 10; do
+    if [ "$1" = running ]; then is_running && return 0; else is_running || return 0; fi
+    sleep 1
+  done
+  return 1
+}
 
 start_now() {
   if [ -z "${WAYLAND_DISPLAY:-}" ]; then
@@ -110,14 +121,25 @@ if is_running; then
   if [[ "$ans" =~ ^[Yy] ]]; then
     systemctl --user stop claude-quota.service 2>/dev/null || true
     pkill -u "$(id -u)" -f "$APP_PATTERN" || true
-    # lwrespawn relaunches the autostart copy about a second after it exits
-    sleep 3
-    if is_running; then
-      echo "    restarted"
+    # sdl turns sigterm into a quit event, which the once-a-second loop can take a while to see
+    if ! wait_for stopped; then
+      pkill -KILL -u "$(id -u)" -f "$APP_PATTERN" || true
+      sleep 1
+    fi
+    if has_wrapper; then
+      # lwrespawn relaunches the autostart copy about a second after it exits
+      if wait_for running; then
+        echo "    restarted"
+      else
+        echo "    the autostart wrapper didn't bring it back; reboot to start it"
+      fi
     else
       start_now
     fi
   fi
+elif has_wrapper; then
+  # it's between restarts; a second copy would draw over it and poll the api twice
+  echo "    the autostart wrapper is starting it"
 else
   read -r -p "Start the display now (no reboot needed)? [Y/n] " ans
   ans="${ans:-Y}"
