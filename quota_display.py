@@ -267,7 +267,9 @@ def _want_windowed(argv: list[str]) -> bool:
 def main() -> None:
     os.environ.setdefault("PYGAME_HIDE_SUPPORT_PROMPT", "1")
     windowed = _want_windowed(sys.argv[1:])
-    pygame.init()
+    # not pygame.init(): that also opens the audio device, which wakes ~80x/s
+    pygame.display.init()
+    pygame.font.init()
     # Hide the cursor in the kiosk; keep it in a window so you can move/close it.
     pygame.mouse.set_visible(windowed)
     # No SCALED: the window already matches the native 640x480, so scaling
