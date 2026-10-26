@@ -14,9 +14,12 @@ import threading
 import time
 import urllib.error
 
-import pygame
+# pygame imports numpy (if installed) for surfarray, which we never use: ~10 MB
+sys.modules.setdefault("numpy", None)
 
-import quota_api
+import pygame  # noqa: E402
+
+import quota_api  # noqa: E402
 
 # ---- layout / theme -------------------------------------------------------
 WIDTH, HEIGHT = 640, 480
