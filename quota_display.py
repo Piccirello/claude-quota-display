@@ -24,6 +24,7 @@ PAD = 28
 POLL_INTERVAL = 5 * 60      # seconds between usage fetches (quotas move slowly)
 MAX_BACKOFF = 30 * 60       # cap for exponential backoff after errors
 NET_RETRY = 5               # first retry when the network isn't up (e.g. at boot)
+MAX_RETRY_AFTER = 60 * 60   # cap on a server Retry-After hint
 STALE_AFTER = 20 * 60       # seconds before cached data is flagged stale
 
 BG = (16, 18, 24)
@@ -78,7 +79,8 @@ def _retry_after_seconds(exc: urllib.error.HTTPError) -> float | None:
     """Parse a Retry-After header (delta-seconds form) if the server sent one."""
     value = exc.headers.get("Retry-After") if exc.headers else None
     if value and value.strip().isdigit():
-        return float(value.strip())
+        # a bogus huge value must not park the poller for days
+        return min(float(value.strip()), MAX_RETRY_AFTER)
     return None
 
 
