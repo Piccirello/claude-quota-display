@@ -177,7 +177,7 @@ class Display:
         self.f_clock = self._font(40, bold=True)
         self.f_label = self._font(26, bold=True)
         self.f_pct = self._font(30, bold=True)
-        self.f_small = self._font(24)
+        self.f_small = self._font(20)
         self.f_tiny = self._font(20)
 
     @staticmethod
