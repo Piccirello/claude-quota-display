@@ -267,6 +267,9 @@ def _want_windowed(argv: list[str]) -> bool:
 def main() -> None:
     os.environ.setdefault("PYGAME_HIDE_SUPPORT_PROMPT", "1")
     windowed = _want_windowed(sys.argv[1:])
+    # sdl2 picks x11 first, which under labwc means running an extra xwayland server
+    if os.environ.get("WAYLAND_DISPLAY"):
+        os.environ.setdefault("SDL_VIDEODRIVER", "wayland,x11")
     # not pygame.init(): that also opens the audio device, which wakes ~80x/s
     pygame.display.init()
     pygame.font.init()
